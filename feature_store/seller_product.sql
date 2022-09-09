@@ -15,9 +15,10 @@ with tb_join_all as (
 
   where t1.dtPurchase < '2018-01-01'
   and t1.dtPurchase >= add_months('2018-01-01',-6)
-)
+),
+tb_summary as (
 
-select idSeller,
+       select idSeller,
        avg(vlWeightGramas) as vlAvgWeight,
        coalesce(avg(case when datediff('2018-01-01', dtPurchase) < 30 then vlWeightGramas end),0) as vlAvgWeight1M,
        coalesce(avg(case when datediff('2018-01-01', dtPurchase) < 90 then vlWeightGramas end),0) as vlAvgWeight3M,
@@ -43,11 +44,37 @@ select idSeller,
        count(distinct case when datediff('2018-01-01', dtPurchase) < 90 then descCategoryName end ) as qtCategoryTyp3M       
        
 
-from tb_join_all
+       from tb_join_all
 
-group by idSeller
+       group by idSeller
 
--- COMMAND ----------
+       ),
+tb_seller_category as (
+       
+  select idSeller,
+         descCategoryName,
+         count(*) as qtCategory
 
+  from tb_join_all
 
-select * from silver_olist.products
+  group by idSeller, descCategoryName
+  order by idSeller, 3 desc
+),
+
+tb_best_category as (
+
+  select *,
+        row_number() over (partition by idSeller order by qtCategory desc) as descTopCategory
+  from tb_seller_category
+  QUALIFY descTopCategory = 1
+
+)
+
+select t1.*,
+       t2.descCategoryName
+
+from tb_summary as t1
+
+left join tb_best_category as t2 
+on t1.idSeller = t2.idSeller 
+
